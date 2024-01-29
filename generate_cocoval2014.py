@@ -19,34 +19,42 @@ def get_hash_value(original_filename):
 
 # build category dictionary for coco and lvis
 def build_category_dict():
-    if os.path.exists('val2014_captions.npz') is True:  # if .npz file is not exist
-        npz_file = np.load('val2014_captions.npz', allow_pickle=True)
-        captions = npz_file['captions'][()]
-        seeds = npz_file['seeds'][()]
-        return captions, seeds
+    # if os.path.exists('val2014_captions.npz') is True:  # if .npz file is not exist
+    #     npz_file = np.load('val2014_captions.npz', allow_pickle=True)
+    #     captions = npz_file['captions'][()]
+    #     seeds = npz_file['seeds'][()]
+    #     return captions, seeds
 
-    captions = []
-    # coco annotations file
+    # captions = []
+    # # coco annotations file
+    # coco_f = open('/data/dataset/coco2014-val/annotations/captions_val2014.json')
+    # coco_annotations = json.load(coco_f)
+    # for annotation in coco_annotations['annotations']:
+    #     caption = annotation['caption']
+    #     captions += [caption]
+    # coco_f.close()
+
+    # # captions
+    # captions = list(set(filter(None, captions)))
+    # captions.sort()
+    # random.seed(2023)
+    # random.shuffle(captions)
     coco_f = open('/data/dataset/coco2014-val/annotations/captions_val2014.json')
     coco_annotations = json.load(coco_f)
+    captions = []
     for annotation in coco_annotations['annotations']:
         caption = annotation['caption']
-        captions += [caption]
+        captions.append(caption)
     coco_f.close()
-
-    # captions
-    captions = list(set(filter(None, captions)))
-    captions.sort()
-    random.seed(2023)
-    random.shuffle(captions)
-
+    random.seed(2024)
+    captions = random.choices(captions, k=30000)
     # seeds
-    random.seed(2023)
     seeds = random.sample(range(0, len(captions)*10), len(captions))
     seeds.sort()
     random.shuffle(seeds)
 
     np.savez('val2014_captions.npz', captions=captions, seeds=seeds)
+    
     return captions, seeds
 
 def process_data(student_model, captions, seeds, save_path):
@@ -99,9 +107,9 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--network_pth', help='Network pickle filename', type=str, default='/data/20231212/SwiftBrush_reproduce_se_parallel/checkpoints/vsd_global_step26000.pth')
+    parser.add_argument('--network_pth', help='Network pickle filename', type=str, default='/data/20231212/SwiftBrush_reproduce_se_parallel/checkpoints/vsd_global_step8000.pth')
     parser.add_argument('--sd_base_path', type=str, default='/data/', help="'/data/' for 3090, '/home/share/' for a40")
-    parser.add_argument('--save_path', help='folder where to save images', type=str, default='/home/liutao/workspace/data/ours_1_coco30k')
+    parser.add_argument('--save_path', help='folder where to save images', type=str, default='/home/liutao/workspace/data/ours_coco30k_test')
     parser.add_argument('--from_case', help='continue generating from case_number', type=int, required=False, default=0)
     parser.add_argument('--end_case', help='end generation of case_number', type=int, required=False, default=300_00)  # 30K following SwiftBrush
     parser.add_argument('--device', help='gpu device', type=str, required=False, default="cuda:0")
