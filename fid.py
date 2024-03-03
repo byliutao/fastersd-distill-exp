@@ -78,6 +78,10 @@ def calculate_fid_given_paths(paths, img_size=256, batch_size=50):
     fid_value = frechet_distance(mu[0], cov[0], mu[1], cov[1])
     return fid_value
 
+def calculate_loop(real_path,fake_paths,image_size,batch_size):
+    for fake_path in fake_paths:
+        fid_value = calculate_fid_given_paths([real_path, fake_path], image_size, batch_size)
+        print('FID: ', fid_value)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -88,12 +92,21 @@ if __name__ == '__main__':
     fid_value = calculate_fid_given_paths(args.paths, args.img_size, args.batch_size)
     print('FID: ', fid_value)
 
+    # real_path = "/home/liutao/workspace/data/diversity/sd50"
+    # fake_path = ["/home/liutao/workspace/data/diversity/instaflow1",
+    #              "/home/liutao/workspace/data/diversity/lcm1",
+    #              "/home/liutao/workspace/data/diversity/lcm4",
+    #              "/home/liutao/workspace/data/diversity/sdxl_turbo1",
+    #              "/home/liutao/workspace/data/diversity/sdxl_turbo4",
+    #              "/home/liutao/workspace/data/diversity/ours4"]
+
+    # calculate_loop(real_path,fake_path,512,500)
 # python -m eval_metrics.fid --paths PATH_REAL PATH_FAKE
 
 # coco-val2014
 # ---------------------------------------------------------------------------------------------------------------------#
 # SwiftBrush reproduce with 30K subset captions of coco-val2014 (A40)
-# python -m eval_metrics.fid --img_size 512 --batch_size 500 --paths /data/dataset/coco2014-val/val2014 /data/20231212/SwiftBrush_reproduce_final20231227/results/val2014
+# python -m eval_metrics.fid --img_size 512 --batch_size 500 --paths /data/dataset/coco2014-val/val2014 /home/liutao/workspace/data/ours_12_coco30k
 # 92.5308658984995
 #
 

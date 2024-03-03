@@ -27,15 +27,15 @@ from utils.se_parallel_utils import register_se_forward  # share encoder
 def generate_single_image(
         network,
         prompt: str,
-        seed,
+        seed=2024,
+        num_inference_steps=4
 ):
-    img = prompt_to_img_student(network, prompt, seed=seed)
+    img = prompt_to_img_student(network, prompt, seed=seed, num_inference_steps=num_inference_steps)
     img = img.permute(0, 2, 3, 1).cpu().numpy()
     img = (img * 255).round().astype('uint8')
     img = image_grid(img, grid_size=(-1, 1))
     img = Image.fromarray(img)
     return img
-
 
 
 def generate_images(
@@ -129,7 +129,7 @@ def save_image(imgs, path, caption_path=None):
     return imgs
 
 @torch.no_grad()
-def prompt_to_img_student(student, prompt, height=512, width=512, latents=None, seed=2023, num_inference_steps=4):
+def prompt_to_img_student(student, prompt, height=512, width=512, latents=None, seed=2024, num_inference_steps=4):
     vae, tokenizer, text_encoder, unet, scheduler = student
 
     generator = torch.Generator().manual_seed(seed)
