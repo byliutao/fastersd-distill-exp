@@ -144,6 +144,44 @@ class MyStableDiffusion(nn.Module):
 
         return latents
 
+
+    def produce_all_noises(self, text_embeddings, height=512, width=512, num_inference_steps=50, guidance_scale=7.5,
+                        latents=None, teacher='T2ITeacher'):
+
+        if latents is None:
+            latents = torch.randn(
+                (text_embeddings.shape[0] // 2, self.unet.config.in_channels, height // 8, width // 8),
+                device=self.device)
+
+        noises = []
+
+        self.scheduler.set_timesteps(num_inference_steps)
+
+        with torch.autocast('cuda'):
+            for i, t in enumerate(self.scheduler.timesteps):
+                # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+                latent_model_input = torch.cat([latents] * 2)
+
+                # predict the noise residual
+                with torch.no_grad():
+                    assert teacher in ['T2ITeacher', 'LoRATeacher']
+                    if teacher == 'T2ITeacher':
+                        noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings)['sample']
+                    elif teacher == 'LoRATeacher':
+                        noise_pred = self.lora_unet(latent_model_input, t, encoder_hidden_states=text_embeddings)[
+                            'sample']
+
+                # perform guidance
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                noise_pred = noise_pred_text + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noises.append({"t": t, "value":noise_pred_text.cpu()})
+
+                # compute the previous noisy sample x_t -> x_t-1
+                latents = self.scheduler.step(noise_pred, t, latents)['prev_sample']
+
+        return noises
+
+
     # @torch.no_grad()
     def decode_latents(self, latents):
         latents.to(self.vae.device)
@@ -191,6 +229,27 @@ class MyStableDiffusion(nn.Module):
         # imgs = (imgs * 255).round().astype('uint8')
 
         return latents
+
+    def prompts_to_noises(self, prompts, negative_prompts='', height=512, width=512, num_inference_steps=50,
+                      guidance_scale=7.5, latents=None, teacher='T2ITeacher'):
+
+        if isinstance(prompts, str):
+            prompts = [prompts]
+
+        if isinstance(negative_prompts, str):
+            negative_prompts = [negative_prompts] * len(prompts)
+
+        # Prompts -> text embeds
+        text_embeds = self.get_text_embeds(prompts, negative_prompts)  # [2, 77, 768]
+
+        # Text embeds -> img latents
+        noises = self.produce_all_noises(text_embeds, height=height, width=width, latents=latents,
+                                       num_inference_steps=num_inference_steps, guidance_scale=guidance_scale,
+                                       teacher=teacher)  # [1, 4, 64, 64]
+
+
+        return noises
+
 
     def produce_latents_student(self, student_unet, text_embeddings, height=512, width=512, num_inference_steps=4,
                                 latents=None):

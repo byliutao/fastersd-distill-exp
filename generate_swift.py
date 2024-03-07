@@ -114,6 +114,32 @@ def prompt_to_img_student(student, prompt, height=512, width=512, latents=None, 
 
     return imgs
 
+
+@torch.no_grad()
+def prompts_to_noises(student, prompt, height=512, width=512, latents=None, seed=2023, alphas=None):
+    vae, tokenizer, text_encoder, unet = student
+
+    generator = torch.Generator().manual_seed(seed)
+
+    if isinstance(prompt, str):
+        prompt = [prompt]
+
+    # Prompts -> text embeds
+    text_input = tokenizer(prompt, padding='max_length', max_length=tokenizer.model_max_length, truncation=True, return_tensors='pt')
+    text_embeddings = text_encoder(text_input.input_ids.to(unet.device))[0]
+
+    # Text embeds -> img latents
+    if latents is None:
+        latents = torch.randn((text_embeddings.shape[0], unet.config.in_channels, height // 8, width // 8), generator=generator).to(unet.device)
+
+    T = torch.tensor(int(999))
+
+    # predict the noise residual
+    noise_pred = unet(latents, T, encoder_hidden_states=text_embeddings)['sample']
+
+    return noise_pred
+
+
 def load_model(sd_base_path, network_pth):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

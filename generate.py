@@ -173,6 +173,52 @@ def prompt_to_img_student(student, prompt, height=512, width=512, latents=None, 
 
     return imgs
 
+@torch.no_grad()
+def prompts_to_noises(student, prompt, height=512, width=512, latents=None, seed=2024, num_inference_steps=4):
+    vae, tokenizer, text_encoder, unet, scheduler = student
+
+    generator = torch.Generator().manual_seed(seed)
+    noises = []
+
+    if isinstance(prompt, str):
+        prompt = [prompt]
+
+    # Prompts -> text embeds
+    text_input = tokenizer(prompt, padding='max_length', max_length=tokenizer.model_max_length, truncation=True, return_tensors='pt')
+    text_embeddings = text_encoder(text_input.input_ids.to(unet.device))[0]
+
+    # Text embeds -> img latents
+    if latents is None:
+        latents = torch.randn((text_embeddings.shape[0], unet.config.in_channels, height // 8, width // 8), generator=generator).to(unet.device)
+
+    scheduler.set_timesteps(num_inference_steps)
+
+    if unet.register_store['use_parallel']:
+        unet.register_store['timesteps'] = scheduler.timesteps
+
+    for i, t in enumerate(scheduler.timesteps):
+        # predict the noise residual
+        unet.register_store['se_step'] = i
+        noise_pred = unet(latents, t, encoder_hidden_states=text_embeddings)['sample']
+
+        noises.append({"t": t, "value":noise_pred.cpu()})
+        
+        if unet.register_store['use_parallel']:
+            break
+
+        # compute the previous noisy sample x_t -> x_t-1
+        latents = scheduler.step(noise_pred, t, latents)['prev_sample']
+
+    if unet.register_store['use_parallel']:
+        for i, t in enumerate(unet.register_store['timesteps']):
+            curr_noise = noise_pred[i: i + 1]
+            noises.append({"t": t, "value":curr_noise.cpu()})
+            latents = scheduler.step(curr_noise, t, latents)['prev_sample']
+
+    return noises
+
+
+
 def load_model(sd_base_path, network_pth, device):
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
 
